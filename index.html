@@ -310,6 +310,7 @@ a.chip{color:var(--ink);text-decoration:none}
 .msug .img{grid-row:span 2;width:48px;height:36px;border-radius:6px;overflow:hidden;display:block}
 .msug small{font-weight:500;color:var(--muted)}
 .bmerma{margin-top:12px;width:100%}
+.mbulk{display:grid;gap:8px;margin-top:12px;padding:14px;border-radius:var(--r-s);background:var(--green-soft);border:1px solid var(--green)}
 #mermaView>*{min-width:0} .mresp .chips{flex-wrap:wrap}
 @media (max-width:430px){ .nav a{font-size:10px} .nav a svg{width:20px;height:20px} }
 /* ---- voz ---- */
@@ -693,8 +694,12 @@ const fmtN=n=>(Math.round(n*100)/100).toLocaleString('es-ES');
 
 async function mConfig(){
   if(M.cfg) return M.cfg;
-  try{ const r=await fetch('merma-config.json',{cache:'no-store'}); const c=await r.json(); M.cfg=c; M.cfgOk=!!(c&&c.url&&c.clave); }
-  catch(e){ M.cfg={}; M.cfgOk=false; }
+  try{ const r=await fetch('merma-config.json',{cache:'no-store'});
+    if(!r.ok){ M.cfg={}; M.cfgOk=false; M.cfgErr='nofile'; return M.cfg; }
+    const txt=await r.text(); let c; try{ c=JSON.parse(txt); }catch(e){ M.cfg={}; M.cfgOk=false; M.cfgErr='json'; return M.cfg; }
+    M.cfg=c||{}; M.cfgOk=!!(c&&c.url&&c.clave); M.cfgErr=M.cfgOk?(/^https?:\/\/.+\/exec$/.test(c.url.trim())?'':'url'):'vacio';
+    if(M.cfgErr==='url') M.cfgOk=false; else if(M.cfgOk){ M.cfg.url=c.url.trim(); M.cfg.clave=String(c.clave).trim(); } }
+  catch(e){ M.cfg={}; M.cfgOk=false; M.cfgErr='nofile'; }
   return M.cfg;
 }
 async function api(a,datos){
@@ -775,7 +780,11 @@ function barras(titulo,L,key){
 }
 function mermaInner(){
   if(!M.cfg) return '<div class="empty">Cargando…</div>';
-  if(!M.cfgOk) return `<div class="blk"><h2 class="s">Merma no configurada</h2><p>Esta versión de la app no está conectada a la hoja de merma. El registro funciona en la app instalada desde GitHub, una vez configurada con la guía de montaje.</p></div>`;
+  if(!M.cfgOk){ const why={nofile:'No encuentro el archivo merma-config.json en el repositorio. Sube el último paquete de la app (lo incluye) o créalo con el paso 4 de la guía.',
+      vacio:'El archivo merma-config.json está, pero vacío: falta pegar la dirección del script y la clave (pasos 1 a 4 de la guía de montaje).',
+      json:'El archivo merma-config.json tiene un error de escritura (una comilla, coma o llave de más o de menos). Cópialo otra vez tal cual del paso 4 de la guía.',
+      url:'La dirección del archivo merma-config.json no es la del script: debe empezar por https://script.google.com/macros/s/ y terminar en /exec.'}[M.cfgErr==='nofile'&&!/github\.io$/.test(location.hostname)?'':M.cfgErr]||'Esta versión de la app no está conectada a la hoja de merma. El registro funciona en la app instalada desde GitHub, una vez configurada con la guía de montaje.';
+    return `<div class="blk"><h2 class="s">Merma no configurada</h2><p>${esc(why)}</p><p class="count">Después de corregirlo en GitHub, espera 1–2 minutos y vuelve a abrir esta pestaña.</p></div>`; }
   const t=mTienda(), nom=mNombre();
   if(!t||!nom) return `<div class="blk"><h2 class="s">Este dispositivo</h2><p class="count">Solo se pide una vez. Se puede cambiar cuando quieras.</p>
     <div class="lbl" style="margin-top:12px">Tienda</div><div class="chips" style="flex-wrap:wrap">${TIENDAS.map(x=>`<button class="chip" data-mt="${x}" aria-pressed="${(M.tSel||t)===x}">${x}</button>`).join('')}</div>
@@ -801,6 +810,10 @@ function mermaInner(){
     <div style="margin-top:12px">${kpisM(totales(L),`<div><b class="num">${pv}</b><span>por validar</span></div>`)}</div>
     ${M.total>3000?'<div class="count">Se muestran los 3.000 registros más recientes. Acota las fechas o usa la hoja de Google.</div>':''}
     <div class="mbars">${barras('Por motivo',L,'motivo')}${barras('Productos que más se tiran',L,'producto')}${M.resp.central&&q.tienda==='Todas'?barras('Por tienda',L,'tienda'):barras('Por persona',L,'empleado')}</div>
+    ${(()=>{ const pend=L.filter(r=>(r.estado||'Pendiente')==='Pendiente'); if(!pend.length) return '';
+      const amb=(M.resp.central&&q.tienda==='Todas'?'de las 4 tiendas':'de '+esc(q.tienda))+(q.motivo?' con el motivo «'+esc(q.motivo)+'»':'');
+      return M.bulk?`<div class="mbulk"><b>¿Validar ${pend.length} registros pendientes ${amb}?</b><span class="count">Solo se validan los que ves con los filtros actuales.</span><input class="minp" id="mBulkNota" placeholder="Nota para todos (opcional)" maxlength="300"><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" id="mBulkOk">Sí, validar ${pend.length}</button><button class="btn" id="mBulkNo">Cancelar</button></div></div>`
+        :`<button class="btn p mbig" id="mBulk" style="margin-top:12px">Validar todo lo pendiente (${pend.length})</button>`; })()}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:8px;flex-wrap:wrap"><span class="count">${L.length} registros · toca uno para validarlo</span><button class="btn" id="mCsv">Exportar a Excel (CSV)</button></div>
     ${L.length?`<div class="rows" style="margin-top:8px">${L.map(r=>filaMerma(r,true,false)).join('')}</div>`:'<div class="count" style="margin-top:8px">No hay registros con estos filtros.</div>'}
   </section>`;
@@ -899,6 +912,7 @@ async function accionMerma(t,e){
     try{ const j=await api('pin',{pin}); M.resp={pin,tiendas:j.tiendas,central:j.central}; M.rq.tienda=j.central?'Todas':j.tiendas[0]; SS.set('merma-pin',pin); SS.set('merma-alc',JSON.stringify(M.resp)); await mRefrescar(); }
     catch(err){ toast(err.code==='pin'?'PIN incorrecto.':'No hay conexión con la hoja.'); t.disabled=false; } return true; }
   if(t.id==='mSalir'){ salirResp(); pintarMerma(); return true; }
+  if(t.dataset.mrg||t.dataset.mtr||t.dataset.mes!=null) M.bulk=false;
   if(t.dataset.mrg){ M.rq.rango=t.dataset.mrg; if(M.rq.rango!=='otro') await mRefrescar(); else pintarMerma(); return true; }
   if(t.id==='mAplicar'){ M.rq.desde=$('mDesde').value; M.rq.hasta=$('mHasta').value; if(M.rq.desde&&M.rq.hasta&&M.rq.desde>M.rq.hasta) [M.rq.desde,M.rq.hasta]=[M.rq.hasta,M.rq.desde]; await mRefrescar(); return true; }
   if(t.dataset.mtr){ M.rq.tienda=t.dataset.mtr; await mRefrescar(); return true; }
@@ -907,6 +921,11 @@ async function accionMerma(t,e){
   if(t.dataset.mrev){ const id=t.dataset.id, nota=($('mn-'+id)||{}).value||''; t.disabled=true;
     try{ await api('review',{pin:M.resp.pin,id,estado:t.dataset.mrev,nota}); const r=M.regs.find(x=>x.id===id); if(r){ r.estado=t.dataset.mrev; if(nota) r.nota_revision=nota; } M.abierto=null; toast(t.dataset.mrev==='Validado'?'Validado.':t.dataset.mrev==='Rechazado'?'Rechazado.':'Vuelve a pendiente.'); pintarMerma(); mRefrescar(true); }
     catch(err){ toast('No se ha podido guardar. Revisa la conexión.'); t.disabled=false; } return true; }
+  if(t.id==='mBulk'){ M.bulk=true; pintarMerma(); return true; }
+  if(t.id==='mBulkNo'){ M.bulk=false; pintarMerma(); return true; }
+  if(t.id==='mBulkOk'){ const q=M.rq, ids=M.regs.filter(r=>(!q.motivo||r.motivo===q.motivo)&&(r.estado||'Pendiente')==='Pendiente').map(r=>r.id), nota=($('mBulkNota')||{}).value||''; t.disabled=true; t.textContent='Validando…';
+    try{ const j=await api('reviewMany',{pin:M.resp.pin,ids,estado:'Validado',nota}); M.bulk=false; toast(j.cambiados===1?'1 registro validado.':`${j.cambiados} registros validados.`); await mRefrescar(); }
+    catch(err){ toast(err.code==='accion'?'Falta actualizar el script de la hoja a la última versión (ver guía).':'No se ha podido validar. Revisa la conexión.'); t.disabled=false; t.textContent='Reintentar'; } return true; }
   if(t.id==='mCsv'){ exportarCSV(); return true; }
   return false;
 }
@@ -938,7 +957,7 @@ function render(){
 function go(hash){ if(location.hash===hash) render(); else location.hash=hash; }
 addEventListener('hashchange',()=>{ render(); scrollTo(0,0); });
 
-const MKEYS=['mnew','mt','mrg','mtr','mes','mfoto','mrev'], MIDS=['mGuardarDisp','mCambiar','mRetry','mEntrar','mSalir','mAplicar','mCsv'];
+const MKEYS=['mnew','mt','mrg','mtr','mes','mfoto','mrev'], MIDS=['mGuardarDisp','mCambiar','mRetry','mEntrar','mSalir','mAplicar','mCsv','mBulk','mBulkNo','mBulkOk'];
 $('main').addEventListener('click',e=>{
   const t=e.target.closest('button,a');
   if(!t){ const r=e.target.closest('[data-mr]'); if(r&&!e.target.closest('.mdet')){ M.abierto=M.abierto===r.dataset.mr?null:r.dataset.mr; pintarMerma(); } return; }
