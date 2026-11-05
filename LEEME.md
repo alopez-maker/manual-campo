@@ -22,3 +22,6 @@ Sube los archivos nuevos al mismo repositorio, sustituyendo los anteriores. Las 
 
 ## Actualización del 03/11/2026 (fichas técnicas 03/11 · 364 referencias)
 Si ya la tenías publicada, sube y sustituye **todos** los archivos (en las mismas dos tandas). Las apps instaladas descargan la versión nueva solas al abrirlas con conexión.
+
+## Registro de merma (05/11/2026)
+- `merma-config.json` conecta la app con la hoja de Google de la merma. Viene vacío: rellénalo siguiendo la guía de montaje (dirección del script y clave) desde GitHub, con el lápiz de editar. No hace falta volver a subir nada más.
