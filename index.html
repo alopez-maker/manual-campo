@@ -310,6 +310,7 @@ a.chip{color:var(--ink);text-decoration:none}
 .msug .img{grid-row:span 2;width:48px;height:36px;border-radius:6px;overflow:hidden;display:block}
 .msug small{font-weight:500;color:var(--muted)}
 .bmerma{margin-top:12px;width:100%}
+.mask{display:grid;gap:8px;padding:14px;border-radius:var(--r-s);background:var(--warn-soft);border:1px solid var(--warn)}
 .mbulk{display:grid;gap:8px;margin-top:12px;padding:14px;border-radius:var(--r-s);background:var(--green-soft);border:1px solid var(--green)}
 #mermaView>*{min-width:0} .mresp .chips{flex-wrap:wrap}
 @media (max-width:430px){ .nav a{font-size:10px} .nav a svg{width:20px;height:20px} }
@@ -825,13 +826,24 @@ let MF=null;
 function abrirFormMerma(pid,motivo){
   if(!mTienda()||!mNombre()){ go('#merma'); toast('Indica primero tu tienda y tu nombre.'); return; }
   const p=pid?BYID[pid]:null;
-  MF={p,cant:'',uni:p?unidadPorDefecto(p):'kg',motivo:motivo||'',destino:'Basura',foto:'',com:''};
+  MF={p,p0:p,mot0:motivo||'',cant:'',uni:p?unidadPorDefecto(p):'kg',motivo:motivo||'',destino:'Basura',foto:'',com:''};
   let el=$('mformBg'); if(!el){ el=document.createElement('div'); el.id='mformBg'; el.className='msheet-bg'; document.body.appendChild(el); }
   el.hidden=false; el.innerHTML=`<div class="msheet" role="dialog" aria-modal="true" aria-label="Registrar merma">${formInner()}</div>`;
   document.body.style.overflow='hidden';
   setTimeout(()=>{ const f=p?$('mfCant'):$('mfProd'); if(f) f.focus(); },50);
 }
-function cerrarForm(){ const el=$('mformBg'); if(el){ el.hidden=true; el.innerHTML=''; } document.body.style.overflow=''; MF=null; }
+function cerrarForm(forzar){
+  if(!forzar&&MF&&mfSucio()){ preguntarDescartar(()=>cerrarForm(true)); return; }
+  const el=$('mformBg'); if(el){ el.hidden=true; el.innerHTML=''; } document.body.style.overflow=''; MF=null; }
+function mfSucio(){ if(!MF) return false; leerForm(); return MF.p!==MF.p0||String(MF.cant).trim()!==''||MF.motivo!==MF.mot0||MF.destino!=='Basura'||!!MF.foto||MF.com.trim()!==''; }
+let DESCARTAR=null;
+function preguntarDescartar(si){
+  DESCARTAR=si; const s=document.querySelector('.msheet'); if(!s) { si(); return; }
+  let q=$('mfAsk'); if(!q){ q=document.createElement('div'); q.id='mfAsk'; q.className='mask'; s.prepend(q); }
+  q.innerHTML='<b>Tienes una merma a medio grabar</b><span class="count">Si sales ahora se perderá lo que has rellenado.</span><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" id="mfSeguir">Seguir grabando</button><button class="btn" id="mfDescartar">Descartar y salir</button></div>';
+  s.scrollTop=0; setTimeout(()=>$('mfSeguir')&&$('mfSeguir').focus(),30);
+}
+function limpiarMerma(){ M.regs=[]; M.hoy=[]; M.fotos={}; M.abierto=null; M.bulk=false; M.total=0; if(M.resp) salirResp(); }
 function formInner(){
   const p=MF.p;
   return `<div class="msh"><b>Registrar merma</b><button class="link" id="mfX" aria-label="Cerrar">Cerrar</button></div>
@@ -870,7 +882,7 @@ function guardarMerma(){
     producto_id:p.id,producto:p.ref,categoria:p.cat,subcategoria:p.sub,formato:p.fmt,cantidad:cant,unidad:MF.uni,motivo:MF.motivo,destino:MF.destino,comentario:MF.com.trim(),foto:MF.foto,dispositivo:mDisp(),estado:'Pendiente'};
   const cola=mCola(); cola.push(r);
   if(!setCola(cola)){ r.foto=''; cola[cola.length-1]=r; if(!setCola(cola)){ e.textContent='No queda espacio en el dispositivo. Conéctate para enviar lo pendiente.'; return; } toast('Sin espacio para la foto: se guarda sin ella.'); }
-  cerrarForm(); toast(navigator.onLine===false?'Merma guardada. Se enviará sola al volver la conexión.':'Merma registrada.');
+  cerrarForm(true); toast(navigator.onLine===false?'Merma guardada. Se enviará sola al volver la conexión.':'Merma registrada.');
   if(VIEW==='merma') pintarMerma();
   enviarCola();
 }
@@ -886,6 +898,8 @@ document.addEventListener('click',async e=>{
   else if(t.dataset.mfp){ leerForm(); MF.p=BYID[t.dataset.mfp]; MF.uni=unidadPorDefecto(MF.p); repintarForm(); setTimeout(()=>$('mfCant')&&$('mfCant').focus(),30); }
   else if(t.id==='mfSinFoto'){ leerForm(); MF.foto=''; repintarForm(); }
   else if(t.id==='mfOk'){ guardarMerma(); }
+  else if(t.id==='mfSeguir'){ const q=$('mfAsk'); if(q) q.remove(); DESCARTAR=null; }
+  else if(t.id==='mfDescartar'){ const f=DESCARTAR; DESCARTAR=null; if(f) f(); }
 });
 document.addEventListener('input',e=>{
   if(e.target.id!=='mfProd'||!MF) return; const v=e.target.value, ex=DATA.find(p=>p.ref===v);
@@ -947,7 +961,8 @@ mConfig().then(()=>{ if(mCola().length) enviarCola(); });
 let VIEW='inicio';
 function render(){
   const h=location.hash.replace('#','')||'inicio';
-  const isP=h.startsWith('p-'); VIEW=isP?'ficha':(['inicio','catalogo','calendario','camara','merma','revision'].includes(h)?h:'inicio');
+  const isP=h.startsWith('p-'), prev=VIEW; VIEW=isP?'ficha':(['inicio','catalogo','calendario','camara','merma','revision'].includes(h)?h:'inicio');
+  if(prev==='merma'&&VIEW!=='merma') limpiarMerma();
   if(!isP) S.back='#'+VIEW;
   document.querySelectorAll('.nav a').forEach(a=>a.setAttribute('aria-current',a.dataset.v===(isP?(S.back||'#catalogo').slice(1):VIEW)?'page':'false'));
   $('mName').textContent=MESES[S.mes];
@@ -955,7 +970,13 @@ function render(){
   $('main').innerHTML=`<div class="page">${html}</div>`;
 }
 function go(hash){ if(location.hash===hash) render(); else location.hash=hash; }
-addEventListener('hashchange',()=>{ render(); scrollTo(0,0); });
+let HASH=location.hash;
+addEventListener('hashchange',()=>{
+  if(MF){ const dest=location.hash;
+    if(mfSucio()){ history.replaceState(null,'',HASH||'#inicio'); preguntarDescartar(()=>{ cerrarForm(true); location.hash=dest; }); return; }
+    cerrarForm(true); }
+  HASH=location.hash; render(); scrollTo(0,0); });
+addEventListener('beforeunload',e=>{ if(MF&&mfSucio()){ e.preventDefault(); e.returnValue=''; } });
 
 const MKEYS=['mnew','mt','mrg','mtr','mes','mfoto','mrev'], MIDS=['mGuardarDisp','mCambiar','mRetry','mEntrar','mSalir','mAplicar','mCsv','mBulk','mBulkNo','mBulkOk'];
 $('main').addEventListener('click',e=>{
