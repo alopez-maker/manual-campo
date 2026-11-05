@@ -19,3 +19,6 @@ Esta carpeta es la app completa. Publicada en GitHub Pages, se abre desde cualqu
 
 ## Actualizarla
 Sube los archivos nuevos al mismo repositorio, sustituyendo los anteriores. Las apps instaladas se actualizan solas la siguiente vez que se abren con conexión (el archivo `sw.js` cambia de versión con cada paquete nuevo).
+
+## Actualización del 03/11/2026 (fichas técnicas 03/11 · 364 referencias)
+Si ya la tenías publicada, sube y sustituye **todos** los archivos (en las mismas dos tandas). Las apps instaladas descargan la versión nueva solas al abrirlas con conexión.
